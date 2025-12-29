@@ -53,30 +53,28 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     @Resource
     private CacheClient clientClient;
+
+    @Resource
+    private com.github.benmanes.caffeine.cache.Cache<Long, Shop> shopCache;
     @Override
     public Result queryById(Long id){
-        /*缓存穿透
-        //Shop shop = queryWithPassThrough(id);
-        //Shop shop = clientClient
-               // .queryWithPassThrough(RedisConstants.CACHE_SHOP_KEY, id, Shop.class, this::getById, RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        // 1. 查询本地缓存 (Caffeine)
+        Shop shop = shopCache.getIfPresent(id);
+        if (shop != null) {
+            return Result.ok(shop);
+        }
 
-        //互斥锁解决缓存击穿
-//        Shop shop = queryWithMutex(id);
-//        if(shop==null){
-//            return Result.fail("店铺不存在！");
-//        }
-         */
-
-        //用逻辑过期解决缓存击穿
-        // Shop shop = queryWithLogicalExpire(id);
-        Shop shop = clientClient.
-                queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        // 2. 查询 Redis (使用缓存穿透解决方案，支持自动回源)
+        shop = clientClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        
         if(shop==null){
-
             return Result.fail("店铺不存在！");
         }
-        return Result.ok(shop);
 
+        // 3. 写入本地缓存
+        shopCache.put(id, shop);
+
+        return Result.ok(shop);
     }
 
     private static final ExecutorService CACHE_REBUILD_EXECUTOR= Executors.newFixedThreadPool(10);
