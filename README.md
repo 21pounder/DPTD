@@ -92,7 +92,6 @@ src/main/java/com/hmdp
 ## 👤 作者
 
 - **Maintainer**: Young
-- **Original**: Heima Programmer
 
 ---
 *本项目仅供学习与研究使用。*
